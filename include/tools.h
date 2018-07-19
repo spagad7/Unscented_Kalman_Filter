@@ -24,6 +24,10 @@ public:
   */
   VectorXd CalculateRMSE(const vector<VectorXd> &estimations, const vector<VectorXd> &ground_truth);
 
+  /**
+  * Function to calculate Normalized Innovation Squared (NIS) value
+  */
+  double CalculateNIS(VectorXd z, VectorXd z_pred, MatrixXd S);
 };
 
 #endif /* TOOLS_H_ */

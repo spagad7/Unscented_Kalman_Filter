@@ -6,6 +6,7 @@
 #include <vector>
 #include <string>
 #include <fstream>
+#include "tools.h"
 
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
@@ -92,6 +93,21 @@ private:
 
   ///* Measurement noise matrix for radar
   MatrixXd R_radar;
+
+  ///* Tools class object for calculating nis
+  Tools t_;
+
+  ///* For dumping NIS values to a file
+  bool nis_radar_;
+
+  bool nis_lidar_;
+
+  // file pointer for writing NIS data
+  std::fstream fs_rdr_;
+
+  std::fstream fs_ldr_;
+
+  double dt_;
 
   /**
   * Calculates mean state vector and covariance matrix from predicted sigma points

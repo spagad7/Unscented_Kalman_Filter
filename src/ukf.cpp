@@ -1,6 +1,8 @@
 #include "ukf.h"
 #include "Dense"
 #include <iostream>
+#include "tools.h"
+#include <fstream>
 
 using namespace std;
 using Eigen::MatrixXd;
@@ -23,7 +25,7 @@ UKF::UKF() {
     // Process noise standard deviation longitudinal acceleration in m/s^2
     std_a_ = 1.5;
     // Process noise standard deviation yaw acceleration in rad/s^2
-    std_yawdd_ = 0.6;
+    std_yawdd_ = 0.3;
     // Laser measurement noise standard deviation position1 in m
     std_laspx_ = 0.15;
     // Laser measurement noise standard deviation position2 in m
@@ -48,6 +50,12 @@ UKF::UKF() {
     lambda_ = 3 - n_aug_;
     // init flag
     is_initialized_ = false;
+    // set nis flag for radar
+    nis_radar_ = true;
+    // set nis flag for lidar
+    nis_lidar_ = true;
+    // time keeper for nis graph
+    dt_ = 0.0;
 
     // Generate weights vector to calculate mean and covariance of predicted sigma points
     weights_ = VectorXd(2*n_aug_+1);
@@ -71,13 +79,36 @@ UKF::UKF() {
     R_radar <<  std_radr_*std_radr_,  0,                        0,
                 0,                    std_radphi_*std_radphi_,  0,
                 0,                    0,                        std_radrd_*std_radrd_;
+
+    if(nis_radar_) {
+        std::string file_name = "../nis_radar.csv";
+        fs_rdr_.open(file_name, std::ios::out);
+        if(!fs_rdr_.is_open()){
+            std::cerr << "Error opening file: " << file_name << std::endl;
+            exit(-1);
+        }
+    }
+
+    if(nis_lidar_) {
+        std::string file_name = "../nis_lidar.csv";
+        fs_ldr_.open(file_name, std::ios::out);
+        if(!fs_ldr_.is_open()){
+            std::cerr << "Error opening file: " << file_name << std::endl;
+            exit(-1);
+        }
+    }
 }
 
 
 /**
 * Destructor
 */
-UKF::~UKF() {}
+UKF::~UKF() {
+    if(nis_radar_)
+        fs_rdr_.close();
+    if(nis_lidar_)
+        fs_ldr_.close();
+}
 
 
 /**
@@ -105,6 +136,7 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
 
     // calculate delta_t and call predict function to predict state vector and the measurements
     double delta_t = double(meas_package.timestamp_ - time_us_) / 1000000.0;
+    dt_ += delta_t;
     time_us_ = meas_package.timestamp_;
 
     if(meas_package.sensor_type_ == MeasurementPackage::LASER && use_laser_) {
@@ -223,7 +255,8 @@ void UKF::Prediction(double delta_t) {
  */
 void UKF::UpdateLidar(MeasurementPackage meas_package) {
     // Calculate error
-    VectorXd y = meas_package.raw_measurements_ - H_ * x_;
+    VectorXd z = H_ * x_;
+    VectorXd y = meas_package.raw_measurements_ - z;
 
     // Project uncertanity to measurement space
     MatrixXd S = H_ * P_ * H_.transpose() + R_lidar;
@@ -236,6 +269,13 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
 
     // Update state covariance matrix
     P_ = (MatrixXd::Identity(5, 5) - K * H_) * P_;
+
+    if(nis_lidar_) {
+        // calculate NIS for radar
+        double nis = t_.CalculateNIS(meas_package.raw_measurements_, z, S);
+        fs_ldr_ << dt_ << "," << nis << std::endl;
+        // /std::cout << "NIS lidar = " << nis << std::endl;
+    }
 }
 
 
@@ -321,4 +361,11 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
 
     // update state covariance matrix
     P_ = P_ - K * S * K.transpose();
+
+    if(nis_radar_) {
+        // calculate NIS for radar
+        double nis = t_.CalculateNIS(meas_package.raw_measurements_, z, S);
+        fs_rdr_ << dt_ << "," << nis << std::endl;
+        // /std::cout << "NIS radar = " << nis << std::endl;
+    }
 }
